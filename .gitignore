@@ -1,0 +1,10 @@
+node_modules
+.next
+.env*
+!.env.example
+coverage
+*.tsbuildinfo
+__pycache__/
+*.py[cod]
+public/uploads/*
+!public/uploads/.gitkeep

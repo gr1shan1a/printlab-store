@@ -1,0 +1,2 @@
+import type {Prisma} from "@prisma/client";
+export async function reserveVariant(tx:Prisma.TransactionClient,variantId:string,quantity:number){const result=await tx.productVariant.updateMany({where:{id:variantId,stock:{gte:quantity},reserved:{lte:1000000}},data:{reserved:{increment:quantity}}});if(result.count!==1)throw new Error("Недостаточно товара");const variant=await tx.productVariant.findUniqueOrThrow({where:{id:variantId}});if(variant.stock-variant.reserved<0)throw new Error("Недостаточно товара");return variant;}

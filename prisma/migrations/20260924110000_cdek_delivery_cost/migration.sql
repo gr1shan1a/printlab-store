@@ -1,0 +1,2 @@
+ALTER TABLE "Order"
+ADD COLUMN "deliveryCostInKopecks" INTEGER NOT NULL DEFAULT 0;

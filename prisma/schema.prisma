@@ -1,0 +1,463 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum OrderStatus {
+  NEW
+  PAID
+  CONFIRMED
+  WAITING_FOR_PRINT
+  PRINTING
+  READY
+  SHIPPED
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  CANCELED
+}
+
+enum ProductionStatus {
+  QUEUED
+  PRINTING
+  COMPLETED
+  FAILED
+}
+
+enum MovementType {
+  PURCHASE
+  SALE
+  RESERVE
+  RELEASE
+  CORRECTION
+  RETURN
+}
+
+enum MessageStatus {
+  NEW
+  IN_PROGRESS
+  RESOLVED
+  SPAM
+}
+enum CustomRequestStatus {
+  NEW
+  REVIEWING
+  DEFERRED
+  ACCEPTED
+  IN_PRODUCTION
+  READY
+  COMPLETED
+  DECLINED
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  emailVerifiedAt DateTime?
+  passwordHash String
+  name         String?
+  phone        String?
+  telegram     String?
+  role         Role       @default(USER)
+  blockedAt    DateTime?
+  deletedAt    DateTime?
+  createdAt    DateTime   @default(now())
+  failedLoginAttempts Int @default(0)
+  loginLockedUntil DateTime?
+  orders       Order[]
+  sessions     Session[]
+  auditLogs    AuditLog[] @relation("Actor")
+  emailVerificationTokens EmailVerificationToken[]
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model ApiRateLimit {
+  key       String   @id
+  count     Int
+  resetAt   DateTime
+  updatedAt DateTime @updatedAt
+
+  @@index([resetAt])
+}
+
+model NotificationJob {
+  id            String   @id @default(cuid())
+  eventKey      String   @unique
+  kind          String
+  entityId      String
+  attempts      Int      @default(0)
+  nextAttemptAt DateTime @default(now())
+  lockedUntil   DateTime?
+  lockToken     String?
+  sentAt        DateTime?
+  lastError     String?
+  createdAt     DateTime @default(now())
+
+  @@index([sentAt, nextAttemptAt])
+}
+
+model CaptchaChallenge {
+  id         String   @id
+  answerHash String
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime @default(now())
+
+  @@index([expiresAt])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  expiresAt DateTime
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Category {
+  id        String    @id @default(cuid())
+  name      String
+  slug      String    @unique
+  sortOrder Int       @default(0)
+  products  Product[] @relation("PrimaryCategory")
+  extraProducts Product[] @relation("AdditionalCategories")
+}
+
+model Product {
+  id                String             @id @default(cuid())
+  name              String
+  slug              String             @unique
+  sku               String             @unique
+  shortDescription  String
+  description       String
+  priceInKopecks    Int
+  oldPriceInKopecks Int?
+  material          String
+  color             String
+  colorSelectable   Boolean            @default(false)
+  fixedColors       String[]            @default([])
+  dimensions        String?
+  weightGrams       Int?
+  plasticWeightGrams Int?
+  plasticWastePercent Int              @default(10)
+  printMinutes100    Int?
+  printMinutes166    Int?
+  printBatchSize     Int                @default(1)
+  leadTimeDays      Int                @default(2)
+  featured          Boolean            @default(false)
+  active            Boolean            @default(true)
+  archivedAt        DateTime?
+  modelSourceUrl    String?
+  categoryId        String
+  category          Category           @relation("PrimaryCategory", fields: [categoryId], references: [id])
+  categories        Category[]         @relation("AdditionalCategories")
+  images            ProductImage[]
+  variants          ProductVariant[]
+  attributes        ProductAttribute[]
+  plasticUsages     ProductPlasticUsage[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([categoryId, active])
+}
+
+model ProductImage {
+  id        String  @id @default(cuid())
+  url       String
+  alt       String
+  position  Int     @default(0)
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model ProductAttribute {
+  id        String  @id @default(cuid())
+  name      String
+  value     String
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model ProductVariant {
+  id             String              @id @default(cuid())
+  sku            String              @unique
+  material       String
+  color          String
+  size           String?
+  configuration  String?
+  imageUrl       String?
+  priceInKopecks Int
+  stock          Int                 @default(0)
+  reserved       Int                 @default(0)
+  active         Boolean             @default(true)
+  productId      String
+  product        Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  orderItems     OrderItem[]
+  movements      InventoryMovement[]
+
+  @@index([productId])
+}
+
+model PlasticMaterial {
+  id                   String                @id @default(cuid())
+  name                 String
+  type                 String
+  brand                String?
+  color                String
+  diameterMm           Float                 @default(1.75)
+  spoolWeightGrams     Int
+  priceInKopecks       Int
+  unopenedSpools       Int                   @default(0)
+  remainingGrams       Int
+  supplier             String?
+  notes                String?
+  active               Boolean               @default(true)
+  productUsages        ProductPlasticUsage[]
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+
+  @@index([type, color, active])
+}
+
+model ProductPlasticUsage {
+  id                String          @id @default(cuid())
+  productId         String
+  plasticMaterialId String
+  grams             Int
+  product           Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  plasticMaterial   PlasticMaterial @relation(fields: [plasticMaterialId], references: [id])
+
+  @@unique([productId, plasticMaterialId])
+  @@index([plasticMaterialId])
+}
+
+model Order {
+  id             String               @id @default(cuid())
+  number         Int                  @unique @default(autoincrement())
+  userId         String?
+  user           User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
+  status         OrderStatus          @default(NEW)
+  firstName      String
+  lastName       String
+  recipientName  String?
+  customerName   String?
+  phone          String
+  email          String
+  telegram       String?
+  city           String
+  address        String
+  deliveryMethod String
+  deliveryProvider String?
+  deliveryPointCode String?
+  cdekOrderUuid  String?
+  cdekTrackingNumber String?
+  cdekStatus     String?
+  paymentMethod  String
+  paymentStatus  PaymentStatus       @default(PENDING)
+  paymentId      String?              @unique
+  paymentRequestKey String?           @unique
+  paidAt         DateTime?
+  comment        String?
+  deliveryCostInKopecks Int              @default(0)
+  totalInKopecks Int
+  hiddenByUser   Boolean              @default(false)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  items          OrderItem[]
+  history        OrderStatusHistory[]
+  movements      InventoryMovement[]
+
+  @@index([userId, createdAt])
+}
+
+model OrderItem {
+  id             String           @id @default(cuid())
+  orderId        String
+  order          Order            @relation(fields: [orderId], references: [id])
+  variantId      String
+  variant        ProductVariant   @relation(fields: [variantId], references: [id])
+  productName    String
+  variantLabel   String
+  sku            String
+  priceInKopecks Int
+  quantity       Int
+  tasks          ProductionTask[]
+}
+
+model OrderStatusHistory {
+  id        String      @id @default(cuid())
+  orderId   String
+  order     Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status    OrderStatus
+  comment   String?
+  createdAt DateTime    @default(now())
+}
+
+model ProductionTask {
+  id              String           @id @default(cuid())
+  orderItemId     String?
+  orderItem       OrderItem?       @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  customRequestId String?           @unique
+  customRequest   ContactMessage?  @relation(fields: [customRequestId], references: [id], onDelete: Cascade)
+  quantity        Int
+  status          ProductionStatus @default(QUEUED)
+  printer         String?
+  notes           String?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  printFileName   String?
+  createdAt       DateTime         @default(now())
+}
+
+model PrintFile {
+  id          String   @id @default(cuid())
+  fileName    String   @unique
+  displayName String
+  size        Int
+  createdAt   DateTime @default(now())
+}
+
+model InventoryMovement {
+  id        String         @id @default(cuid())
+  variantId String
+  variant   ProductVariant @relation(fields: [variantId], references: [id])
+  type      MovementType
+  quantity  Int
+  orderId   String?
+  order     Order?         @relation(fields: [orderId], references: [id])
+  comment   String?
+  createdBy String?
+  createdAt DateTime       @default(now())
+
+  @@index([variantId, createdAt])
+}
+
+model ContactMessage {
+  id        String        @id @default(cuid())
+  name      String
+  contact   String
+  email     String?
+  phone     String?
+  subject   String?
+  message   String
+  mode      String?
+  modelUrl  String?
+  reference String?
+  quantity  Int?
+  status    MessageStatus @default(NEW)
+  workflowStatus CustomRequestStatus @default(NEW)
+  promisedDays Int?
+  acceptedAt DateTime?
+  startedAt DateTime?
+  readyAt DateTime?
+  completedAt DateTime?
+  deferredAt DateTime?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  productionTask ProductionTask?
+}
+
+model Review {
+  id        String       @id @default(cuid())
+  name      String
+  rating    Int
+  text      String
+  imageUrl  String?
+  status    ReviewStatus @default(PENDING)
+  createdAt DateTime     @default(now())
+}
+
+model GalleryItem {
+  id         String  @id @default(cuid())
+  imageUrl   String
+  caption    String?
+  productUrl String?
+  position   Int     @default(0)
+}
+
+model StoreSettings {
+  id           String   @id @default("main")
+  heroTitle    String
+  heroSubtitle String
+  phone        String
+  email        String
+  telegram     String
+  address      String?
+  updatedAt    DateTime @updatedAt
+}
+
+model ProductionCostSettings {
+  id                    String   @id @default("main")
+  printerName           String   @default("Bambu Lab A1")
+  purchasePriceKopecks  Int      @default(4600000)
+  maintenanceKopecks    Int      @default(400000)
+  resourceHours         Int      @default(3000)
+  powerWatts            Int      @default(1300)
+  electricityKopecksKwh Int      @default(700)
+  updatedAt             DateTime @updatedAt
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actor      User?    @relation("Actor", fields: [actorId], references: [id], onDelete: SetNull)
+  action     String
+  entityType String
+  entityId   String
+  before     Json?
+  after      Json?
+  ip         String?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+}
+
+// Анонимная статистика главной страницы. Идентификатор существует только в
+// first-party cookie и не связывается с данными аккаунта или IP-адресом.
+model HomeVisitor {
+  id        String      @id
+  createdAt DateTime    @default(now())
+  lastSeenAt DateTime   @updatedAt
+  visits    HomeVisit[]
+}
+
+model HomeVisit {
+  id        String      @id @default(cuid())
+  visitorId String
+  visitor   HomeVisitor @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+  createdAt DateTime    @default(now())
+
+  @@index([createdAt])
+  @@index([visitorId, createdAt])
+}

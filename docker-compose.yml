@@ -1,0 +1,68 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: printlab
+      POSTGRES_USER: printlab
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
+    volumes: [printlab_db:/var/lib/postgresql/data]
+    healthcheck: {test: ["CMD-SHELL", "pg_isready -U printlab"], interval: 5s, timeout: 3s, retries: 10}
+  web:
+    build:
+      context: .
+      args:
+        NEXT_PUBLIC_STORE_URL: ${NEXT_PUBLIC_STORE_URL}
+        NEXT_PUBLIC_YANDEX_MAPS_API_KEY: ${NEXT_PUBLIC_YANDEX_MAPS_API_KEY}
+        NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${NEXT_PUBLIC_TURNSTILE_SITE_KEY}
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      AUTH_SECRET: ${AUTH_SECRET}
+      PASSWORD_PEPPER: ${PASSWORD_PEPPER}
+      NEXT_PUBLIC_STORE_URL: ${NEXT_PUBLIC_STORE_URL}
+      APP_URL: ${APP_URL:-${NEXT_PUBLIC_STORE_URL}}
+      TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
+      TURNSTILE_HOSTNAMES: ${TURNSTILE_HOSTNAMES:-}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_ADMIN_CHAT_ID: ${TELEGRAM_ADMIN_CHAT_ID:-}
+      TELEGRAM_ADMIN_USER_IDS: ${TELEGRAM_ADMIN_USER_IDS:-}
+      TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}
+      TELEGRAM_WEBHOOK_URL: ${TELEGRAM_WEBHOOK_URL:-}
+      STORE_TELEGRAM: ${STORE_TELEGRAM:-}
+      STORE_PHONE: ${STORE_PHONE:-}
+      STORE_EMAIL: ${STORE_EMAIL:-}
+      STORE_PICKUP_ADDRESS: ${STORE_PICKUP_ADDRESS:-}
+      STORE_INN: ${STORE_INN:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      CDEK_CLIENT_ID: ${CDEK_CLIENT_ID:-}
+      CDEK_CLIENT_SECRET: ${CDEK_CLIENT_SECRET:-}
+      CDEK_CITY_CODE: ${CDEK_CITY_CODE:-137}
+      CDEK_ORIGIN_CITY_CODE: ${CDEK_ORIGIN_CITY_CODE:-137}
+      CDEK_SHIPMENT_POINT: ${CDEK_SHIPMENT_POINT:-SPB56}
+      CDEK_TARIFF_CODE: ${CDEK_TARIFF_CODE:-136}
+      YOOKASSA_SHOP_ID: ${YOOKASSA_SHOP_ID:-}
+      YOOKASSA_SECRET_KEY: ${YOOKASSA_SECRET_KEY:-}
+      PRINT_AGENT_TOKEN: ${PRINT_AGENT_TOKEN:-}
+      PRINT_AGENT_URL: ${PRINT_AGENT_URL:-}
+    expose: ["3000"]
+    volumes: [printlab_uploads:/app/public/uploads]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    depends_on: {postgres: {condition: service_healthy}}
+  proxy:
+    image: nginx:1.28-alpine
+    restart: unless-stopped
+    user: "101:101"
+    ports: ["127.0.0.1:32741:8080"]
+    volumes: [./nginx.conf:/etc/nginx/nginx.conf:ro]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    depends_on: [web]
+volumes: {printlab_db: {}, printlab_uploads: {}}

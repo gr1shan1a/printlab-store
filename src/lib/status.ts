@@ -1,0 +1,1 @@
+export const statusLabel:Record<string,string>={NEW:"NOT PAID",PAID:"Оплачен",CONFIRMED:"Подтверждён",WAITING_FOR_PRINT:"Ожидает печати",PRINTING:"Печатается",READY:"Готов",SHIPPED:"Отправлен",COMPLETED:"Завершён",CANCELLED:"Отменён",QUEUED:"В очереди",FAILED:"Ошибка"};

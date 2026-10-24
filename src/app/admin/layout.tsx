@@ -1,0 +1,1 @@
+import {redirect} from "next/navigation";import {currentUser} from "@/lib/auth";import {AdminShell} from "@/components/AdminShell";export default async function Layout({children}:{children:React.ReactNode}){const user=await currentUser();if(!user)redirect("/login?next=/admin");if(user.role!=="ADMIN")redirect("/account");return <AdminShell>{children}</AdminShell>}

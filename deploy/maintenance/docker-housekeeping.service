@@ -1,0 +1,8 @@
+[Unit]
+Description=Clean disposable Docker cache and prioritize VPN memory
+After=docker.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/docker-housekeeping
+Nice=19
+IOSchedulingClass=idle

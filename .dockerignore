@@ -1,0 +1,15 @@
+node_modules
+.next
+.git
+.env
+npm-debug.log*
+coverage
+public/uploads
+
+.env.*
+!.env.example
+.aws
+.codex
+.agents
+*.pem
+*.key
